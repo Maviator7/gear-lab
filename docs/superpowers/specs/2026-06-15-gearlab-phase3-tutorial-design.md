@@ -42,12 +42,13 @@ The application header gains a two-option segmented control:
 
 Normal mode is the default. Entering tutorial mode:
 
-1. Resets tutorial progress to step 1.
-2. Stops the engine and sets engine RPM to `0`.
-3. Selects neutral.
-4. Connects the clutch.
-5. Forces the simulator display/behavior mode to Phase2 `detail`.
-6. Shows the tutorial overlay above the 3D canvas.
+1. Atomically resets the transmission simulation and tutorial progress.
+2. Sets the tutorial to step 1.
+3. Stops the engine and sets engine RPM to `0`.
+4. Sets both selected and mechanically locked gear to neutral.
+5. Connects the clutch.
+6. Forces the simulator display/behavior mode to Phase2 `detail`.
+7. Shows the tutorial overlay above the 3D canvas.
 
 The existing beginner/detail selector is disabled while the tutorial is active
 and displays `詳細` as selected. It becomes interactive again in normal mode.
@@ -57,6 +58,8 @@ the in-memory progress will be discarded. Leaving from the completion screen
 does not ask for confirmation. Confirming the exit returns to normal mode and
 restores a safe baseline: neutral, clutch connected, engine running at
 `1200 rpm`, and the previously selected normal-mode beginner/detail preference.
+The confirmation is an in-app dialog with explicit `続ける` and
+`チュートリアルを終了` commands; it does not use `window.confirm`.
 
 ### Engine Control
 
@@ -73,6 +76,8 @@ The control panel gains a normal command button:
 
 Starting the engine sets `engineRunning=true` and sets RPM to `800` when the
 current RPM is `0`. Stopping it sets `engineRunning=false` and RPM to `0`.
+Normal mode initially starts with `engineRunning=true` and `rpm=1200`, preserving
+the current launch experience.
 
 The RPM slider is disabled while the engine is stopped. Starting after a stop
 always resumes at `800 rpm`; the previous running RPM is not restored.
@@ -83,8 +88,9 @@ The animation and telemetry use effective engine RPM:
 const effectiveRpm = state.engineRunning ? state.rpm : 0;
 ```
 
-Therefore the engine block/flywheel, input train, and telemetry visibly stop
-instead of treating engine stop as a cosmetic UI state.
+Therefore the engine block/flywheel stops and the connected input train decays
+toward zero according to the existing simulation dynamics instead of treating
+engine stop as a cosmetic UI state.
 
 ## Tutorial Layout
 
@@ -121,7 +127,8 @@ behavior introduced as part of this work.
 
 After step 8, the guide area expands into a centered modal-like panel over the
 3D scene. The panel remains within the canvas region rather than covering the
-right-side controls.
+right-side controls. Simulation controls are disabled during the quiz and
+completion phases except for the quiz/completion commands themselves.
 
 ## Tutorial Data Model
 
@@ -250,6 +257,8 @@ When a predicate first becomes true:
 The `次へ` button is disabled while the step is waiting. During the one-second
 success state it is enabled and advances immediately, allowing the learner to
 skip the remaining success delay. The user cannot bypass an unmet action.
+Manual advance, tutorial exit, and tutorial restart always cancel the pending
+auto-advance timer so a stale callback cannot skip a later step.
 
 Progress never moves backward if the learner later changes the controls.
 
@@ -359,9 +368,11 @@ the simulator in Phase2 detail mode.
 When an assisted step's required gear button is selected:
 
 1. The assistant disengages the clutch.
-2. It requests the selected gear through the existing transmission API.
-3. It waits for the matching `engaged` event.
-4. It re-engages the clutch unless the target is neutral.
+2. It runs the same deterministic auto-clutch/auto-synchronization sequence used
+   by Phase2 beginner shifting while the UI and telemetry remain in detail mode.
+3. It emits the standard `synchroStart`, `syncReady`, and `engaged` events.
+4. It waits for the matching `engaged` event.
+5. It re-engages the clutch for every assisted target, including neutral.
 
 The assistant is active only for the expected action in steps 2, 3, and 4.
 Other gear buttons are disabled during those steps. No assistant behavior is
@@ -369,7 +380,8 @@ available from step 5 onward.
 
 This logic is exposed by a dedicated transmission command, not by directly
 mutating `GearboxState` from tutorial UI. The command reuses the existing
-request/event flow so the visible shift animation still runs.
+animation and event flow, but guarantees success so the learner is not asked to
+solve clutch or rev-matching behavior before those concepts are taught.
 
 ## Quiz
 
@@ -377,11 +389,17 @@ The quiz begins automatically after step 8's success interval. It contains
 exactly three questions, one at a time, with three options each:
 
 1. Why is the clutch disengaged?
-   - Correct: to separate the engine and transmission.
+   - `エンジンとトランスミッションを切り離すため` (correct)
+   - `エンジン回転数を必ず上げるため`
+   - `タイヤの回転を逆向きにするため`
 2. Why does first gear produce strong force?
-   - Correct: because its gear ratio is large.
+   - `ギア比が大きいため` (correct)
+   - `出力軸がエンジンより速く回るため`
+   - `クラッチが常に切れているため`
 3. What does the synchronizer do?
-   - Correct: matches rotational speeds.
+   - `回転数を一致させるため` (correct)
+   - `エンジンを停止させるため`
+   - `ギアの歯数を変えるため`
 
 Selecting an option:
 
@@ -560,7 +578,9 @@ Add:
 ### Existing Simulation Regression
 
 - Normal mode remains free exploration.
-- Phase2 beginner/detail behavior remains unchanged outside tutorial mode.
+- Phase2 beginner/detail shift behavior remains unchanged outside tutorial mode;
+  the new engine start/stop command is the only intentional normal-mode
+  interaction addition.
 - Assisted shifts still emit and animate the standard transmission events.
 - Engine stop visibly drives engine RPM and transmission input toward zero.
 
@@ -601,7 +621,8 @@ Both must pass without errors before completion.
    score as specified.
 10. Completion displays `MT基礎コース修了`, the percentage score, restart, and
     normal-mode return.
-11. Normal-mode Phase2 interactions remain available and unchanged.
+11. Normal-mode Phase2 interactions remain available and unchanged, except for
+    the documented engine start/stop addition.
 12. The course definition is separate from runtime progression and UI.
 13. Desktop and narrow layouts remain usable without incoherent overlap.
 14. Unit/component tests and the production build pass.
