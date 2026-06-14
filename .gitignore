@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .claude/
+.superpowers/
 .DS_Store
 .env
 .env.*
