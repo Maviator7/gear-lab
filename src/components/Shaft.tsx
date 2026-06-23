@@ -7,6 +7,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimRef, Sim } from '../types';
+import type { TutorialHighlightStrength } from '../tutorial/types';
 
 interface Props {
   x1: number;
@@ -17,7 +18,11 @@ interface Props {
   color?: string;
   simRef: SimRef;
   getAngle: (sim: Sim) => number;
+  tutorialHighlight?: boolean;
+  tutorialHighlightStrength?: TutorialHighlightStrength;
 }
+
+const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
 
 export default function Shaft({
   x1,
@@ -28,15 +33,29 @@ export default function Shaft({
   color = '#6b7280',
   simRef,
   getAngle,
+  tutorialHighlight = false,
+  tutorialHighlightStrength = 'strong',
 }: Props) {
   const groupRef = useRef<THREE.Group>(null);
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const length = Math.abs(x2 - x1);
   const cx = (x1 + x2) / 2;
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const g = groupRef.current;
     if (!g) return;
     g.rotation.x = getAngle(simRef.current); // 軸 +X まわりに共回転
+
+    const mat = matRef.current;
+    if (!mat) return;
+    if (tutorialHighlight) {
+      const base = tutorialHighlightStrength === 'soft' ? 0.16 : 0.35;
+      mat.emissive.copy(COLOR_TUTORIAL);
+      mat.emissiveIntensity = base + Math.sin(clock.elapsedTime * 4) * 0.06;
+    } else {
+      mat.emissive.setRGB(0, 0, 0);
+      mat.emissiveIntensity = 0;
+    }
   });
 
   // 表面リブ（十字4本）: 軸に沿った細い box。共回転で回転が視認できる。
@@ -48,7 +67,7 @@ export default function Shaft({
       {/* 本体円柱: cylinderはY軸方向 → Z軸まわり90°でX方向へ寝かせる */}
       <mesh castShadow receiveShadow rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[radius, radius, length, 20]} />
-        <meshStandardMaterial color={color} metalness={0.6} roughness={0.45} />
+        <meshStandardMaterial ref={matRef} color={color} metalness={0.6} roughness={0.45} />
       </mesh>
       {/* 十字リブ（X方向に長いbox） */}
       <RibCross length={ribLen} offset={ribOffset} color={color} />

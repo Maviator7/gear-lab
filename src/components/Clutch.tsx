@@ -15,17 +15,44 @@ import { MAIN_Y, VISUAL_SCALE } from '../data/gears';
 interface Props {
   simRef: SimRef;
   state: GearboxState;
+  engineHighlight?: boolean;
+  clutchHighlight?: boolean;
 }
 
 const CLUTCH_X = -4.6;
 const GAP_TRAVEL = 0.25;
+const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
 
-export default function Clutch({ simRef, state }: Props) {
+function applyHighlight(
+  mat: THREE.MeshStandardMaterial | null,
+  active: boolean,
+  elapsedTime: number,
+  base = 0.35,
+) {
+  if (!mat) return;
+  if (active) {
+    mat.emissive.copy(COLOR_TUTORIAL);
+    mat.emissiveIntensity = base + Math.sin(elapsedTime * 4) * 0.08;
+  } else {
+    mat.emissive.setRGB(0, 0, 0);
+    mat.emissiveIntensity = 0;
+  }
+}
+
+export default function Clutch({
+  simRef,
+  state,
+  engineHighlight = false,
+  clutchHighlight = false,
+}: Props) {
   const flywheelRef = useRef<THREE.Group>(null);
   const discRef = useRef<THREE.Group>(null);
+  const flywheelMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const discMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const engineMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const engineAngle = useRef(0); // エンジン側の自前積分角
 
-  useFrame((_, rawDt) => {
+  useFrame(({ clock }, rawDt) => {
     const sim = simRef.current;
     if (!state.playing) return; // playing凍結に従う
     const dt = Math.min(rawDt, 0.05);
@@ -41,6 +68,10 @@ export default function Clutch({ simRef, state }: Props) {
       discRef.current.rotation.x = sim.angles.input;
       discRef.current.position.x = CLUTCH_X + 0.18 + sim.clutchGap * GAP_TRAVEL;
     }
+
+    applyHighlight(flywheelMatRef.current, engineHighlight || clutchHighlight, clock.elapsedTime);
+    applyHighlight(discMatRef.current, clutchHighlight, clock.elapsedTime);
+    applyHighlight(engineMatRef.current, engineHighlight, clock.elapsedTime, 0.3);
   });
 
   return (
@@ -49,7 +80,7 @@ export default function Clutch({ simRef, state }: Props) {
       <group ref={flywheelRef} position={[CLUTCH_X - 0.05, MAIN_Y, 0]}>
         <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.9, 0.9, 0.16, 32]} />
-          <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.4} />
+          <meshStandardMaterial ref={flywheelMatRef} color="#475569" metalness={0.7} roughness={0.4} />
         </mesh>
         {/* リング状の縁取り（回転視認用の溝）。torusは穴軸=Z生成のため Y軸90°で X軸に巻き付ける */}
         <mesh rotation={[0, Math.PI / 2, 0]}>
@@ -62,7 +93,7 @@ export default function Clutch({ simRef, state }: Props) {
       <group ref={discRef} position={[CLUTCH_X + 0.18, MAIN_Y, 0]}>
         <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.75, 0.75, 0.1, 32]} />
-          <meshStandardMaterial color="#94a3b8" metalness={0.65} roughness={0.45} />
+          <meshStandardMaterial ref={discMatRef} color="#94a3b8" metalness={0.65} roughness={0.45} />
         </mesh>
         {/* 摩擦面パッド（放射状の4枚）で回転視認 */}
         {[0, 1, 2, 3].map((i) => (
@@ -80,7 +111,7 @@ export default function Clutch({ simRef, state }: Props) {
       {/* エンジンブロック（暗色の箱、回転しない） */}
       <mesh position={[-6.1, MAIN_Y, 0]} castShadow receiveShadow>
         <boxGeometry args={[1.4, 1.6, 1.6]} />
-        <meshStandardMaterial color="#1e293b" metalness={0.3} roughness={0.8} />
+        <meshStandardMaterial ref={engineMatRef} color="#1e293b" metalness={0.3} roughness={0.8} />
       </mesh>
     </group>
   );

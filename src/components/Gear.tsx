@@ -11,6 +11,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimRef, Sim } from '../types';
+import type { TutorialHighlightStrength } from '../tutorial/types';
 import { MODULE } from '../data/gears';
 
 export type GearVisualMode = 'powered' | 'free' | 'selected' | 'normal';
@@ -23,6 +24,8 @@ interface Props {
   simRef: SimRef;
   getAngle: (sim: Sim) => number; // 回転角 (rad)
   visual: (sim: Sim) => GearVisualMode; // 表示状態
+  tutorialHighlight?: boolean;
+  tutorialHighlightStrength?: TutorialHighlightStrength;
 }
 
 // ── モジュールレベルのジオメトリキャッシュ ──────────────────
@@ -85,6 +88,7 @@ function buildGearGeometry(teeth: number, thickness: number): THREE.ExtrudeGeome
 
 const COLOR_POWERED = new THREE.Color('#f59e0b'); // amber
 const COLOR_SELECTED = new THREE.Color('#22d3ee'); // cyan
+const COLOR_TUTORIAL = new THREE.Color('#22d3ee'); // cyan
 
 export default function Gear({
   teeth,
@@ -94,12 +98,14 @@ export default function Gear({
   simRef,
   getAngle,
   visual,
+  tutorialHighlight = false,
+  tutorialHighlightStrength = 'strong',
 }: Props) {
   const geometry = useMemo(() => buildGearGeometry(teeth, thickness), [teeth, thickness]);
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const sim = simRef.current;
     const mesh = meshRef.current;
     const mat = matRef.current;
@@ -110,6 +116,8 @@ export default function Gear({
 
     // 表示状態に応じて material を直接更新
     const mode = visual(sim);
+    const pulseBase = tutorialHighlightStrength === 'soft' ? 0.18 : 0.4;
+    const pulse = pulseBase + Math.sin(clock.elapsedTime * 4) * 0.08;
     switch (mode) {
       case 'powered':
         mat.emissive.copy(COLOR_POWERED);
@@ -119,19 +127,29 @@ export default function Gear({
         break;
       case 'selected':
         mat.emissive.copy(COLOR_SELECTED);
-        mat.emissiveIntensity = 0.5;
+        mat.emissiveIntensity = tutorialHighlight ? Math.max(0.5, pulse) : 0.5;
         mat.opacity = 1;
         mat.transparent = false;
         break;
       case 'free':
-        mat.emissive.setRGB(0, 0, 0);
-        mat.emissiveIntensity = 0;
-        mat.opacity = 0.45;
+        if (tutorialHighlight) {
+          mat.emissive.copy(COLOR_TUTORIAL);
+          mat.emissiveIntensity = pulse;
+        } else {
+          mat.emissive.setRGB(0, 0, 0);
+          mat.emissiveIntensity = 0;
+        }
+        mat.opacity = tutorialHighlight ? 0.7 : 0.45;
         mat.transparent = true;
         break;
       default: // normal
-        mat.emissive.setRGB(0, 0, 0);
-        mat.emissiveIntensity = 0;
+        if (tutorialHighlight) {
+          mat.emissive.copy(COLOR_TUTORIAL);
+          mat.emissiveIntensity = pulse;
+        } else {
+          mat.emissive.setRGB(0, 0, 0);
+          mat.emissiveIntensity = 0;
+        }
         mat.opacity = 1;
         mat.transparent = false;
     }

@@ -13,16 +13,37 @@ import { HUBS, MAIN_Y, SLEEVE_TRAVEL } from '../data/gears';
 interface Props {
   hub: HubId;
   simRef: SimRef;
+  tutorialHighlight?: boolean;
 }
 
-export default function Synchronizer({ hub, simRef }: Props) {
+const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
+const COLOR_SYNC = new THREE.Color('#f97316');
+
+function applyTutorialHighlight(
+  mat: THREE.MeshStandardMaterial | null,
+  active: boolean,
+  elapsedTime: number,
+) {
+  if (!mat) return;
+  if (active) {
+    mat.emissive.copy(COLOR_TUTORIAL);
+    mat.emissiveIntensity = 0.28 + Math.sin(elapsedTime * 4) * 0.08;
+  } else {
+    mat.emissive.setRGB(0, 0, 0);
+    mat.emissiveIntensity = 0;
+  }
+}
+
+export default function Synchronizer({ hub, simRef, tutorialHighlight = false }: Props) {
   const hubX = HUBS[hub];
   const hubRef = useRef<THREE.Group>(null);
   const sleeveRef = useRef<THREE.Group>(null);
+  const hubMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const sleeveMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const ringLeftRef = useRef<THREE.MeshStandardMaterial>(null);
   const ringRightRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const sim = simRef.current;
     // ハブ・スリーブは出力軸と共回転
     if (hubRef.current) hubRef.current.rotation.x = sim.angles.output;
@@ -30,10 +51,24 @@ export default function Synchronizer({ hub, simRef }: Props) {
       sleeveRef.current.rotation.x = sim.angles.output;
       sleeveRef.current.position.x = hubX + sim.sleeves[hub] * SLEEVE_TRAVEL;
     }
-    // シンクロリング発光: glow(0..1) → emissiveIntensity 0→3
+    applyTutorialHighlight(hubMatRef.current, tutorialHighlight, clock.elapsedTime);
+    applyTutorialHighlight(sleeveMatRef.current, tutorialHighlight, clock.elapsedTime);
+
+    // シンクロリング発光: 作動中のorangeを最優先。非作動時のみtutorial cyan。
     const glow = sim.synchroGlow[hub] * 3;
-    if (ringLeftRef.current) ringLeftRef.current.emissiveIntensity = glow;
-    if (ringRightRef.current) ringRightRef.current.emissiveIntensity = glow;
+    for (const mat of [ringLeftRef.current, ringRightRef.current]) {
+      if (!mat) continue;
+      if (glow > 0.01) {
+        mat.emissive.copy(COLOR_SYNC);
+        mat.emissiveIntensity = glow;
+      } else if (tutorialHighlight) {
+        mat.emissive.copy(COLOR_TUTORIAL);
+        mat.emissiveIntensity = 0.35 + Math.sin(clock.elapsedTime * 4) * 0.08;
+      } else {
+        mat.emissive.copy(COLOR_SYNC);
+        mat.emissiveIntensity = 0;
+      }
+    }
   });
 
   return (
@@ -42,7 +77,7 @@ export default function Synchronizer({ hub, simRef }: Props) {
       <group ref={hubRef} position={[hubX, 0, 0]}>
         <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.32, 0.32, 0.28, 24]} />
-          <meshStandardMaterial color="#52525b" metalness={0.7} roughness={0.4} />
+          <meshStandardMaterial ref={hubMatRef} color="#52525b" metalness={0.7} roughness={0.4} />
         </mesh>
       </group>
 
@@ -51,6 +86,7 @@ export default function Synchronizer({ hub, simRef }: Props) {
         <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.38, 0.38, 0.3, 24, 1, true]} />
           <meshStandardMaterial
+            ref={sleeveMatRef}
             color="#9ca3af"
             metalness={0.75}
             roughness={0.35}

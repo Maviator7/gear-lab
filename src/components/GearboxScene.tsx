@@ -10,6 +10,7 @@ import type { MutableRefObject } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Html } from '@react-three/drei';
 import type { GearId, GearPosition, Sim, SimRef, GearboxState } from '../types';
+import type { TutorialHighlight } from '../tutorial/types';
 import type { TransmissionEvent, FxState } from '../hooks/useTransmissionState';
 import {
   GEARS,
@@ -34,6 +35,7 @@ interface Props {
   simRef: SimRef;
   fxRef: MutableRefObject<FxState>;
   onEvent?: (e: TransmissionEvent) => void;
+  tutorialHighlights?: TutorialHighlight[];
 }
 
 // ピッチ半径
@@ -49,7 +51,7 @@ const INPUT_SHAFT = { x1: -5.3, x2: -3.0, r: 0.14 };
 const OUTPUT_SHAFT = { x1: -3.0, x2: 5.6, r: 0.14 };
 const COUNTER_SHAFT = { x1: -3.9, x2: 5.2, r: 0.11 };
 
-export default function GearboxScene({ state, simRef, fxRef, onEvent }: Props) {
+export default function GearboxScene({ state, simRef, fxRef, onEvent, tutorialHighlights = [] }: Props) {
   return (
     <Canvas shadows dpr={[1, 2]} camera={{ position: [6, 4, 9], fov: 45 }}>
       {/* 背景・fog */}
@@ -61,7 +63,13 @@ export default function GearboxScene({ state, simRef, fxRef, onEvent }: Props) {
       <directionalLight position={[8, 12, 6]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
       <directionalLight position={[-8, -4, -6]} intensity={1} />
 
-      <GearboxAssembly state={state} simRef={simRef} fxRef={fxRef} onEvent={onEvent} />
+      <GearboxAssembly
+        state={state}
+        simRef={simRef}
+        fxRef={fxRef}
+        onEvent={onEvent}
+        tutorialHighlights={tutorialHighlights}
+      />
 
       {/* 床グリッド */}
       <Grid
@@ -101,10 +109,25 @@ function outputGearVisual(
   return 'free'; // 非ロック=空転(opacity 0.45)
 }
 
-function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
+function hasHighlight(highlights: TutorialHighlight[], target: TutorialHighlight): boolean {
+  return highlights.includes(target);
+}
+
+function isGearHighlighted(highlights: TutorialHighlight[], gear: GearId): boolean {
+  if (gear === '1') return hasHighlight(highlights, 'gear-1');
+  if (gear === '5') return hasHighlight(highlights, 'gear-5');
+  return false;
+}
+
+function GearboxAssembly({ state, simRef, fxRef, onEvent, tutorialHighlights = [] }: Props) {
   // PHASE2: simRef は外部(useTransmissionState)生成。フックは void を返し sim を毎フレーム書き換える。
   useGearboxAnimation(simRef, state, onEvent);
   const sim = simRef;
+  const highlightGearTrain = hasHighlight(tutorialHighlights, 'gear-train');
+  const highlightEngine = hasHighlight(tutorialHighlights, 'engine');
+  const highlightClutch = hasHighlight(tutorialHighlights, 'clutch');
+  const highlightOutputShaft = hasHighlight(tutorialHighlights, 'output-shaft');
+  const highlightSynchronizer = hasHighlight(tutorialHighlights, 'synchronizer');
 
   // ── 入力軸・出力軸・カウンター軸 ──────────────────────────
   const inputAngle = (s: Sim) => s.angles.input;
@@ -118,14 +141,14 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
   return (
     <group>
       {/* ── 軸 ──────────────────────────────────────────── */}
-      <Shaft {...{ x1: INPUT_SHAFT.x1, x2: INPUT_SHAFT.x2 }} y={MAIN_Y} radius={INPUT_SHAFT.r} simRef={sim} getAngle={inputAngle} color="#7b8494" />
-      <Shaft {...{ x1: OUTPUT_SHAFT.x1, x2: OUTPUT_SHAFT.x2 }} y={MAIN_Y} radius={OUTPUT_SHAFT.r} simRef={sim} getAngle={outputAngle} color="#7b8494" />
-      <Shaft {...{ x1: COUNTER_SHAFT.x1, x2: COUNTER_SHAFT.x2 }} y={COUNTER_Y} radius={COUNTER_SHAFT.r} simRef={sim} getAngle={counterAngle} color="#6b7484" />
+      <Shaft {...{ x1: INPUT_SHAFT.x1, x2: INPUT_SHAFT.x2 }} y={MAIN_Y} radius={INPUT_SHAFT.r} simRef={sim} getAngle={inputAngle} color="#7b8494" tutorialHighlight={highlightGearTrain} tutorialHighlightStrength="soft" />
+      <Shaft {...{ x1: OUTPUT_SHAFT.x1, x2: OUTPUT_SHAFT.x2 }} y={MAIN_Y} radius={OUTPUT_SHAFT.r} simRef={sim} getAngle={outputAngle} color="#7b8494" tutorialHighlight={highlightOutputShaft} />
+      <Shaft {...{ x1: COUNTER_SHAFT.x1, x2: COUNTER_SHAFT.x2 }} y={COUNTER_Y} radius={COUNTER_SHAFT.r} simRef={sim} getAngle={counterAngle} color="#6b7484" tutorialHighlight={highlightGearTrain} tutorialHighlightStrength="soft" />
       {/* アイドラー軸（短い細軸） */}
       <Shaft x1={IDLER.x - 0.25} x2={IDLER.x + 0.25} y={IDLER.y} z={IDLER.z} radius={0.07} simRef={sim} getAngle={(s) => s.angles.idler} color="#6b7484" />
 
       {/* ── クラッチ + フライホイール + エンジンブロック ──────── */}
-      <Clutch simRef={sim} state={state} />
+      <Clutch simRef={sim} state={state} engineHighlight={highlightEngine} clutchHighlight={highlightClutch} />
 
       {/* ── 常時噛合段（入力21T / カウンター29T, x=-3.4） ──────── */}
       <Gear
@@ -135,6 +158,8 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
         simRef={sim}
         getAngle={inputAngle}
         visual={inputChainVisual}
+        tutorialHighlight={highlightGearTrain}
+        tutorialHighlightStrength="soft"
       />
       <Gear
         teeth={CONSTANT_MESH.counterTeeth}
@@ -143,12 +168,15 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
         simRef={sim}
         getAngle={counterAngle}
         visual={inputChainVisual}
+        tutorialHighlight={highlightGearTrain}
+        tutorialHighlightStrength="soft"
       />
 
       {/* ── 各変速段ギア ──────────────────────────────────── */}
       {GEARS.map((g) => {
         const counterR = pitchRadius(g.counterTeeth);
         const outputR = pitchRadius(g.outputTeeth);
+        const gearHighlight = highlightGearTrain || isGearHighlighted(tutorialHighlights, g.id);
         // カウンター側ギア（y=COUNTER_Y、カウンター角で回転）。動力経路は powerFlow && ロック段。
         const counterVisual = (s: Sim): GearVisualMode => {
           if (s.lockedGear === g.id && s.powerFlow) return 'powered';
@@ -165,6 +193,8 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
               simRef={sim}
               getAngle={counterAngle}
               visual={counterVisual}
+              tutorialHighlight={gearHighlight}
+              tutorialHighlightStrength={highlightGearTrain ? 'soft' : 'strong'}
             />
             {/* 出力側ギア（常時噛合・空転 or ロック） */}
             <Gear
@@ -174,6 +204,8 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
               simRef={sim}
               getAngle={(s) => s.angles.gears[g.id]}
               visual={(s) => outputGearVisual(s, g.id, state.selectedGear)}
+              tutorialHighlight={gearHighlight}
+              tutorialHighlightStrength={highlightGearTrain ? 'soft' : 'strong'}
             />
             {/* 詳細モード: 歯数バッジ（出力側ギア上） */}
             {state.mode === 'detail' && (
@@ -205,12 +237,14 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
         visual={(s) =>
           s.lockedGear === 'R' && s.powerFlow ? 'powered' : 'free'
         }
+        tutorialHighlight={highlightGearTrain}
+        tutorialHighlightStrength="soft"
       />
 
       {/* ── シンクロナイザー（3ハブ） + シフトフォーク ──────────── */}
       {(Object.keys(HUBS) as (keyof typeof HUBS)[]).map((hub) => (
         <group key={hub}>
-          <Synchronizer hub={hub} simRef={sim} />
+          <Synchronizer hub={hub} simRef={sim} tutorialHighlight={highlightSynchronizer} />
           <ShiftFork hub={hub} simRef={sim} />
         </group>
       ))}
@@ -225,9 +259,6 @@ function GearboxAssembly({ state, simRef, fxRef, onEvent }: Props) {
       <RotationArrow position={[5.4, MAIN_Y, 0]} baseRadius={OUTPUT_SHAFT.r} simRef={sim} getAngle={outputAngle} getRpm={(s) => s.rpms.output} />
       {/* アイドラー（idlerΩ = -counterΩ × Rカウンター歯数/アイドラー歯数） */}
       <RotationArrow position={[IDLER.x, IDLER.y, IDLER.z]} baseRadius={0.07} simRef={sim} getAngle={(s) => s.angles.idler} getRpm={(s) => -s.rpms.counter * (R_SPEC.counterTeeth / IDLER.teeth)} />
-
-      {/* ── 失敗演出 ───────────────────────────────────────── */}
-      <GrindEffect fxRef={fxRef} playing={state.playing} />
 
       {/* ── 失敗演出 ───────────────────────────────────────── */}
       <GrindEffect fxRef={fxRef} playing={state.playing} />
