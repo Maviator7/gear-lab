@@ -9,3 +9,11 @@ export type TutorialHighlight =
   | 'synchronizer';
 
 export type TutorialHighlightStrength = 'soft' | 'strong';
+
+export interface TutorialStepDefinition {
+  id: string;
+  title: string;
+  instruction: string;
+  explanation: string;
+  highlights: TutorialHighlight[];
+}

@@ -10,6 +10,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimRef, GearboxState } from '../types';
+import { applyTutorialEmissive } from '../tutorial/visuals';
 import { MAIN_Y, VISUAL_SCALE } from '../data/gears';
 
 interface Props {
@@ -21,23 +22,6 @@ interface Props {
 
 const CLUTCH_X = -4.6;
 const GAP_TRAVEL = 0.25;
-const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
-
-function applyHighlight(
-  mat: THREE.MeshStandardMaterial | null,
-  active: boolean,
-  elapsedTime: number,
-  base = 0.35,
-) {
-  if (!mat) return;
-  if (active) {
-    mat.emissive.copy(COLOR_TUTORIAL);
-    mat.emissiveIntensity = base + Math.sin(elapsedTime * 4) * 0.08;
-  } else {
-    mat.emissive.setRGB(0, 0, 0);
-    mat.emissiveIntensity = 0;
-  }
-}
 
 export default function Clutch({
   simRef,
@@ -69,9 +53,9 @@ export default function Clutch({
       discRef.current.position.x = CLUTCH_X + 0.18 + sim.clutchGap * GAP_TRAVEL;
     }
 
-    applyHighlight(flywheelMatRef.current, engineHighlight || clutchHighlight, clock.elapsedTime);
-    applyHighlight(discMatRef.current, clutchHighlight, clock.elapsedTime);
-    applyHighlight(engineMatRef.current, engineHighlight, clock.elapsedTime, 0.3);
+    applyTutorialEmissive(flywheelMatRef.current, engineHighlight || clutchHighlight, clock.elapsedTime);
+    applyTutorialEmissive(discMatRef.current, clutchHighlight, clock.elapsedTime);
+    applyTutorialEmissive(engineMatRef.current, engineHighlight, clock.elapsedTime, 'soft');
   });
 
   return (

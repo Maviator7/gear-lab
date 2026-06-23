@@ -8,30 +8,13 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimRef, HubId } from '../types';
+import { applyTutorialEmissive, SYNC_COLOR, TUTORIAL_COLOR, tutorialPulse } from '../tutorial/visuals';
 import { HUBS, MAIN_Y, SLEEVE_TRAVEL } from '../data/gears';
 
 interface Props {
   hub: HubId;
   simRef: SimRef;
   tutorialHighlight?: boolean;
-}
-
-const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
-const COLOR_SYNC = new THREE.Color('#f97316');
-
-function applyTutorialHighlight(
-  mat: THREE.MeshStandardMaterial | null,
-  active: boolean,
-  elapsedTime: number,
-) {
-  if (!mat) return;
-  if (active) {
-    mat.emissive.copy(COLOR_TUTORIAL);
-    mat.emissiveIntensity = 0.28 + Math.sin(elapsedTime * 4) * 0.08;
-  } else {
-    mat.emissive.setRGB(0, 0, 0);
-    mat.emissiveIntensity = 0;
-  }
 }
 
 export default function Synchronizer({ hub, simRef, tutorialHighlight = false }: Props) {
@@ -51,22 +34,25 @@ export default function Synchronizer({ hub, simRef, tutorialHighlight = false }:
       sleeveRef.current.rotation.x = sim.angles.output;
       sleeveRef.current.position.x = hubX + sim.sleeves[hub] * SLEEVE_TRAVEL;
     }
-    applyTutorialHighlight(hubMatRef.current, tutorialHighlight, clock.elapsedTime);
-    applyTutorialHighlight(sleeveMatRef.current, tutorialHighlight, clock.elapsedTime);
+    applyTutorialEmissive(hubMatRef.current, tutorialHighlight, clock.elapsedTime, 'soft');
+    applyTutorialEmissive(sleeveMatRef.current, tutorialHighlight, clock.elapsedTime);
 
     // シンクロリング発光: 作動中のorangeを最優先。非作動時のみtutorial cyan。
     const glow = sim.synchroGlow[hub] * 3;
     for (const mat of [ringLeftRef.current, ringRightRef.current]) {
       if (!mat) continue;
       if (glow > 0.01) {
-        mat.emissive.copy(COLOR_SYNC);
+        mat.emissive.copy(SYNC_COLOR);
         mat.emissiveIntensity = glow;
+        mat.toneMapped = false;
       } else if (tutorialHighlight) {
-        mat.emissive.copy(COLOR_TUTORIAL);
-        mat.emissiveIntensity = 0.35 + Math.sin(clock.elapsedTime * 4) * 0.08;
+        mat.emissive.copy(TUTORIAL_COLOR);
+        mat.emissiveIntensity = tutorialPulse(clock.elapsedTime);
+        mat.toneMapped = false;
       } else {
-        mat.emissive.copy(COLOR_SYNC);
+        mat.emissive.copy(SYNC_COLOR);
         mat.emissiveIntensity = 0;
+        mat.toneMapped = true;
       }
     }
   });

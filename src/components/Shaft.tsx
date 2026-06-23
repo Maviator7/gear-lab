@@ -8,6 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimRef, Sim } from '../types';
 import type { TutorialHighlightStrength } from '../tutorial/types';
+import { applyTutorialEmissive } from '../tutorial/visuals';
 
 interface Props {
   x1: number;
@@ -21,8 +22,6 @@ interface Props {
   tutorialHighlight?: boolean;
   tutorialHighlightStrength?: TutorialHighlightStrength;
 }
-
-const COLOR_TUTORIAL = new THREE.Color('#22d3ee');
 
 export default function Shaft({
   x1,
@@ -48,14 +47,7 @@ export default function Shaft({
 
     const mat = matRef.current;
     if (!mat) return;
-    if (tutorialHighlight) {
-      const base = tutorialHighlightStrength === 'soft' ? 0.16 : 0.35;
-      mat.emissive.copy(COLOR_TUTORIAL);
-      mat.emissiveIntensity = base + Math.sin(clock.elapsedTime * 4) * 0.06;
-    } else {
-      mat.emissive.setRGB(0, 0, 0);
-      mat.emissiveIntensity = 0;
-    }
+    applyTutorialEmissive(mat, tutorialHighlight, clock.elapsedTime, tutorialHighlightStrength);
   });
 
   // 表面リブ（十字4本）: 軸に沿った細い box。共回転で回転が視認できる。

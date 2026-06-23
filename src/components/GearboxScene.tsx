@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Html } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import type { GearId, GearPosition, Sim, SimRef, GearboxState } from '../types';
 import type { TutorialHighlight } from '../tutorial/types';
 import type { TransmissionEvent, FxState } from '../hooks/useTransmissionState';
@@ -52,16 +53,15 @@ const OUTPUT_SHAFT = { x1: -3.0, x2: 5.6, r: 0.14 };
 const COUNTER_SHAFT = { x1: -3.9, x2: 5.2, r: 0.11 };
 
 export default function GearboxScene({ state, simRef, fxRef, onEvent, tutorialHighlights = [] }: Props) {
+  const tutorialActive = tutorialHighlights.length > 0;
+
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position: [6, 4, 9], fov: 45 }}>
+    <Canvas shadows="soft" dpr={[1, 2]} camera={{ position: [6, 4, 9], fov: 45 }}>
       {/* 背景・fog */}
       <color attach="background" args={['#0b1020']} />
       <fog attach="fog" args={['#0b1020', 16, 40]} />
 
-      {/* ライト: ambient 0.5 + directional 2灯（1灯 castShadow） */}
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[8, 12, 6]} intensity={2} castShadow shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-8, -4, -6]} intensity={1} />
+      <WorkshopLighting tutorialActive={tutorialActive} />
 
       <GearboxAssembly
         state={state}
@@ -86,7 +86,60 @@ export default function GearboxScene({ state, simRef, fxRef, onEvent, tutorialHi
       />
 
       <OrbitControls makeDefault enableDamping target={[0, 0, 0]} />
+      <TutorialPostProcessing active={tutorialActive} />
     </Canvas>
+  );
+}
+
+function WorkshopLighting({ tutorialActive }: { tutorialActive: boolean }) {
+  return (
+    <>
+      <ambientLight intensity={0.38} />
+      <hemisphereLight color="#dbeafe" groundColor="#0f172a" intensity={0.6} />
+      <directionalLight
+        position={[8, 12, 6]}
+        intensity={2.2}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-near={0.5}
+        shadow-camera-far={30}
+        shadow-camera-left={-8}
+        shadow-camera-right={8}
+        shadow-camera-top={6}
+        shadow-camera-bottom={-6}
+        shadow-bias={-0.0001}
+      />
+      <directionalLight position={[-7, 4, -7]} intensity={0.85} color="#93c5fd" />
+      <pointLight
+        position={[-4.8, 1.8, 2.6]}
+        color="#22d3ee"
+        intensity={tutorialActive ? 1.2 : 0.25}
+        distance={8}
+        decay={2}
+      />
+      <pointLight
+        position={[4.2, 1.2, -2.4]}
+        color="#f59e0b"
+        intensity={0.35}
+        distance={9}
+        decay={2}
+      />
+    </>
+  );
+}
+
+function TutorialPostProcessing({ active }: { active: boolean }) {
+  return (
+    <EffectComposer enabled={active} multisampling={0}>
+      <Bloom
+        intensity={0.55}
+        luminanceThreshold={0.25}
+        luminanceSmoothing={0.7}
+        mipmapBlur
+        radius={0.55}
+      />
+      <Vignette offset={0.35} darkness={0.35} />
+    </EffectComposer>
   );
 }
 
